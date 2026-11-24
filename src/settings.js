@@ -1,6 +1,12 @@
 import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import { createElement as h, Fragment, useState } from 'react'
+import { createElement as h, useState } from 'react'
 import { defaults } from './preferences.js'
+
+// 沿用 DSH Worktree 设置页的行布局，开关外观由 DSH 的 Switch 自身绘制。
+const preferenceRowStyle = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, padding: '12px 0',
+  fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: 'var(--dsw-alias-label-primary)',
+}
 
 export const dictionaries = {
   zh: {
@@ -41,13 +47,16 @@ export function Preferences({ t, usePreferences, setPreference }) {
   }
 
   const disabled = snapshot.status !== 'ready' || !snapshot.writable || saving
-  return h(Fragment, null,
+  return h('div', null,
     Object.entries(defaults).map(([field, initial]) => {
       const label = t(field)
-      return h('label', { key: field }, h(Switch, {
-        label, checked: snapshot.value?.[field] ?? initial, disabled,
-        onChange: value => { void change(field, value) },
-      }), ' ', label)
+      return h('label', { key: field, style: preferenceRowStyle },
+        h('span', null, label),
+        h(Switch, {
+          label, checked: snapshot.value?.[field] ?? initial, disabled,
+          onChange: value => { void change(field, value) },
+        }),
+      )
     }),
     failed ? h('p', { role: 'alert' }, t('saveFailed')) : null,
   )

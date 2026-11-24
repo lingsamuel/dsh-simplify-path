@@ -235,6 +235,31 @@ try {
   }
   assert.deepEqual(await convertWsl.evaluate(switchAppearance), await nativeSwitch.evaluate(switchAppearance))
   assert.deepEqual(await copySimplified.evaluate(switchAppearance), await nativeSwitch.evaluate(switchAppearance))
+  const preferenceLayout = element => {
+    const row = element.closest('label')
+    const label = [...row.childNodes].find(node => node.textContent.trim())
+    const range = document.createRange()
+    range.selectNodeContents(label)
+    const text = range.getBoundingClientRect()
+    const control = element.getBoundingClientRect()
+    const { right } = element.closest('[data-plugin-config]').getBoundingClientRect()
+    return {
+      labelBeforeSwitch: text.right < control.left,
+      rightAligned: Math.abs(control.right - right) < 1,
+      verticallyCentered: Math.abs((text.top + text.bottom - control.top - control.bottom) / 2) <= 2,
+      fontSize: getComputedStyle(row).fontSize,
+    }
+  }
+  const expectedLayout = { labelBeforeSwitch: true, rightAligned: true, verticallyCentered: true, fontSize: '13px' }
+  for (const option of [convertWsl, backslashes, copySimplified]) {
+    assert.deepEqual(await option.evaluate(preferenceLayout), expectedLayout)
+  }
+  const desktopViewport = page.viewportSize()
+  await page.setViewportSize({ width: 420, height: desktopViewport.height })
+  for (const option of [convertWsl, backslashes, copySimplified]) {
+    assert.deepEqual(await option.evaluate(preferenceLayout), expectedLayout)
+  }
+  await page.setViewportSize(desktopViewport)
   assert.equal(await convertWsl.isChecked(), true)
   assert.equal(await backslashes.isChecked(), false)
   assert.equal(await copySimplified.isChecked(), true)

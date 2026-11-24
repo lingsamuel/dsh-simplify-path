@@ -1,6 +1,6 @@
 {
   "name": "dsh-simplify-path",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "统一简化 DeepSeek Harness Web 的文件路径显示",
   "type": "module",
   "engines": {
