@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Simplify paths",
+    "description": "Show shorter file paths in Chat, Workspaces, Files, changes and worktrees."
+  }
+}
