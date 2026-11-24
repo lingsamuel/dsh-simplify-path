@@ -12,12 +12,14 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { chromium } from 'playwright-core'
 import pkg from '../package.json' with { type: 'json' }
+import { startCodexFixture, verifyCodexTurnChanges } from './codex-fixture.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const runtime = join(root, '.runtime')
 const command = promisify(execFile)
 const dsh = process.env.DSH_SIMPLIFY_PATH_DSH_BIN ?? 'dsh'
 const chromiumPath = process.env.DSH_SIMPLIFY_PATH_CHROMIUM
+const codexPack = process.env.DSH_SIMPLIFY_PATH_CODEX_PACK
 const pack = resolve(process.argv[2] ?? join(root, 'artifacts', `${pkg.name}-${pkg.version}.tgz`))
 await mkdir(runtime, { recursive: true })
 const home = await mkdtemp(join(runtime, 'web-'))
@@ -121,6 +123,7 @@ function startWeb(environment) {
 }
 
 let model
+let codex
 let host
 let browser
 let page
@@ -129,6 +132,7 @@ try {
   await mkdir(join(home, 'tmp'))
   process.env.TMPDIR = join(home, 'tmp')
   model = await startModel()
+  if (codexPack) codex = await startCodexFixture(home, alpha)
   const environment = {
     ...process.env,
     PATH: `${dirname(dsh)}${delimiter}${process.env.PATH}`,
@@ -137,8 +141,10 @@ try {
     npm_config_cache: join(runtime, 'npm-cache'),
     DEEPSEEK_API_KEY: 'simplify-path-fixture',
     DEEPSEEK_BASE_URL: `http://127.0.0.1:${model.address().port}`,
+    ...(codex && { DSH_CODEX_SOCKET: codex.socketPath }),
   }
-  const installed = await command(dsh, ['plugin', '--profile', 'web', 'add', pack, '--store-dir', join(runtime, 'pnpm-store')], {
+  const packages = codex ? [pack, resolve(codexPack)] : [pack]
+  const installed = await command(dsh, ['plugin', '--profile', 'web', 'add', ...packages, '--store-dir', join(runtime, 'pnpm-store')], {
     cwd: root, env: environment, timeout: 180_000,
   })
   logs.push(installed.stdout, installed.stderr)
@@ -160,6 +166,16 @@ try {
   await page.goto(url)
   const welcome = page.getByRole('button', { name: 'Continue', exact: true })
   await welcome.click()
+  if (codex) {
+    const native = new URL(page.url())
+    native.searchParams.set('mode', 'dsh')
+    const codexUrl = new URL(native)
+    codexUrl.searchParams.set('mode', 'codex')
+    await page.goto(codexUrl.href)
+    await verifyCodexTurnChanges(page, codex.literalCode)
+    await page.goto(native.href)
+    console.log('通过 dsh-codex 的历史文件变更列表、差异标题、展开更多文件和工作树选择器。')
+  }
   const tree = page.getByRole('tree')
   const alphaRow = tree.getByText('Alpha', { exact: true })
   await tree.getByText('Windows paths', { exact: true }).hover()
@@ -311,5 +327,6 @@ try {
     await exited
   }
   model?.close()
+  await codex?.close()
   await rm(home, { recursive: true, force: true })
 }

@@ -40,14 +40,16 @@ DSH 的文件预览使用会话解析出的资源地址，行号作为独立的�
 | --- | --- |
 | 聊天与工具卡片 | 路径形式的 Markdown 链接文字、行内路径、可明确识别的正文裸路径、工具卡片与交付项的路径标签。描述性链接文字沿用作者用词。 |
 | Workspace | 工作区列表及选择器中的目录位置、会话项目目录标签和相关提示。 |
-| File changes | 变更卡片的文件路径、悬浮预览标题、审阅面板的路径列表和 diff 标题。多文件卡片使用历史轮次记录的实际路径。 |
+| File changes | 原生变更卡片、悬浮预览标题、审阅面板的路径列表和 diff 标题。`dsh-codex` 轮次尾部的文件行、差异标题和补丁图注使用同样的规则。 |
 | Files | 文件树根目录、搜索结果的上级路径、文件预览路径及相关提示。 |
-| Worktree | 官方 Change requests & worktrees 插件可见的检出目录、工作树路径提示和变更文件路径。 |
+| Worktree | 官方 Change requests & worktrees 插件的检出目录和变更文件路径。`dsh-codex` 工作树菜单的 `PathLabel` 和输入栏目录按钮的路径提示。 |
 
 代码块、终端输出、搜索输入和文件正文按原始内容呈现。Worktree 变更文件菜单原本复制仓库相对路径，与该视图的简化结果一致。
 
 ## 接入与验证
 
 路径转换集中在一个格式化函数，复用 DSH 的工作区相对路径和主目录简化工具。Web 客户端从 DSH 获取各会话的 Workspace 及 Host 主目录信息，用同一个格式化器处理已识别的路径标签和简化路径复制命令。PathLabel 和其他已确认的界面标记用于定位显示文本，复制命令通过 DSH 上下文菜单注册并从菜单目标读取路径。每个挂载的会话使用其自己的工作区上下文，懒加载、流式消息、悬浮预览和配置变化都重新计算相关标签。插件停用时释放订阅并恢复其处理过的显示文本。
+
+其他插件可通过 DSH 的 `PathLabel` 显示路径。轮次尾部的插件入口按 `conversation.chat.turnTail` 和已识别的文件标题标记处理。`dsh-codex` 继续用原始文件值关联历史、切换工作树和应用变更。浏览器测试可通过 `DSH_SIMPLIFY_PATH_CODEX_PACK` 加载实际的 `dsh-codex` 安装包，使用本地 RPC 夹具回放 Codex 历史。
 
 交付内容包括可本地安装的插件包和使用说明。验证包括目录边界、规则优先级、路径内空格和带行号链接。在隔离的 DSH Web profile 中使用实际浏览器检查五类界面、三个开关和多会话切换。验证缩短后的链接打开正确文件及行号，复制命令写入预期路径，关闭复制开关后菜单更新。Worktree 使用本地 Git 检出验证，复用 DSH 的原生入口。 [右侧 Files 与预览](https://deepseek-harness.github.io/deepseek-harness/reference/subsystems/sidebar-right) · [官方 Worktree 插件](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/experimental/forge-bundle)

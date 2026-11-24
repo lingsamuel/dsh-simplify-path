@@ -14,6 +14,8 @@ const environmentLocation = `${projectRow}, [data-forge-checkout]`
 const changedPath = `[data-changed-files] ${cssClass('path')}`
 const reviewItemPath = cssClass('itemPath')
 const reviewFile = '[data-review-file]'
+const turnTail = '[data-slot="conversation.chat.turnTail"]'
+const composerDirectory = '[data-slot="conversation.input.left"] button[aria-haspopup="menu"][title]'
 const pathButton = `button:is(${cssClass('fileLink')}, ${cssClass('fileMention')}, ${cssClass('fileTargetLink')})`
 const toolSummary = `[data-tool] :is(${cssClass('summary')}, ${cssClass('summarySuffix')})`
 const pathText = [
@@ -21,6 +23,9 @@ const pathText = [
   reviewItemPath, `[data-files-view="search"] ${cssClass('parent')}`,
   `[data-tool] ${cssClass('imageMeta')} > div:first-child`,
   `[data-search="matches"] ${cssClass('filePath')}`, `[data-search="paths"] ${cssClass('line')}`,
+  // Codex 等轮次尾部插件可用 DisclosureRow、DiffBlock 或图注显示文件路径。
+  `${turnTail} [data-disclosure-row] ${cssClass('title')}`,
+  `${turnTail} [data-diff] ${cssClass('path')}`, `${turnTail} figure > figcaption`,
   '[data-forge-file-label]', toolSummary,
 ].join(', ')
 const prose = `[data-chat-flow] :is(${cssClass('markdown')}, [data-markdown-variant], [data-text-interaction-source])`
@@ -30,7 +35,7 @@ const hint = [
 ].join(', ')
 const titleOnly = [
   reviewFile, '[data-files-path] > div > button[title]', '[data-presented-file] button[title]',
-  `[data-read] [data-code-block-banner] ${cssClass('title')}[title]`,
+  `[data-read] [data-code-block-banner] ${cssClass('title')}[title]`, composerDirectory,
 ].join(', ')
 const targets = [workspacePath, projectRow, pathLabel, pathButton, pathText, prose, hint, titleOnly].join(', ')
 const scopeAttributes = ['data-conversation-session', 'data-sidebar-right-session', 'data-row-key']
@@ -131,7 +136,7 @@ export function observePathLabels(document, projectOf, directoryOf, getHome, get
     const workspace = element.matches(pickerPath) || (hover && portal?.workspace)
     const id = workspace ? undefined : owner ?? portal?.id
     const project = projectOf(id)
-    const preserveProjectRoot = element.matches(filesRoot) || element.closest(environmentLocation) !== null
+    const preserveProjectRoot = element.matches(`${filesRoot}, ${composerDirectory}`) || element.closest(environmentLocation) !== null
     const displayOptions = preserveProjectRoot ? { ...options, preserveProjectRoot } : options
     const format = value => formatPath(value, project, home, displayOptions)
     const formatFile = value => formatFilePath(value, project, home, displayOptions)
