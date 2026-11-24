@@ -1,6 +1,6 @@
 {
   "name": "dsh-simplify-path",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "统一简化 DeepSeek Harness Web 的文件路径显示",
   "type": "module",
   "engines": {
@@ -22,10 +22,22 @@
     "locale/",
     "manual/"
   ],
-  "keywords": ["dsh-plugin", "deepseek-harness", "file-paths"],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "file-paths"
+  ],
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "platform": "web", "external": ["react", "@deepseek-ai/dsh-client-ui-primitives"] }
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "external": [
+        "react",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",
