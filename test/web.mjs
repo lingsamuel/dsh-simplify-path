@@ -228,10 +228,17 @@ try {
   const convertWsl = page.getByRole('switch', { name: 'Convert WSL drive paths', exact: true })
   const backslashes = page.getByRole('switch', { name: 'Use backslashes in Windows drive paths', exact: true })
   const copySimplified = page.getByRole('switch', { name: 'Allow copying simplified paths', exact: true })
+  const nativeSwitch = page.getByRole('switch', { name: 'Enable Simplify paths', exact: true })
+  const switchAppearance = element => {
+    const { width, height, borderRadius, backgroundColor } = getComputedStyle(element)
+    return { width, height, borderRadius, backgroundColor }
+  }
+  assert.deepEqual(await convertWsl.evaluate(switchAppearance), await nativeSwitch.evaluate(switchAppearance))
+  assert.deepEqual(await copySimplified.evaluate(switchAppearance), await nativeSwitch.evaluate(switchAppearance))
   assert.equal(await convertWsl.isChecked(), true)
   assert.equal(await backslashes.isChecked(), false)
   assert.equal(await copySimplified.isChecked(), true)
-  await backslashes.click()
+  await page.getByText('Use backslashes in Windows drive paths', { exact: true }).click()
   await page.getByRole('switch', { name: 'Use backslashes in Windows drive paths', checked: true, exact: true }).waitFor()
   await copySimplified.click()
   await page.getByRole('switch', { name: 'Allow copying simplified paths', checked: false, exact: true }).waitFor()
@@ -300,8 +307,7 @@ try {
   await page.getByRole('switch', { name: 'Convert WSL drive paths', checked: false, exact: true }).waitFor()
   assert.equal(await backslashes.isChecked(), true)
   assert.equal(await copySimplified.isChecked(), false)
-  const enable = page.getByRole('switch', { name: 'Enable Simplify paths', exact: true })
-  await enable.click()
+  await nativeSwitch.click()
   await page.getByRole('switch', { name: 'Enable Simplify paths', checked: false, exact: true }).waitFor()
   await alphaSession.click()
   await chat.getByRole('button', { name: `${textFile}:42`, exact: true }).nth(1).waitFor()

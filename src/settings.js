@@ -1,4 +1,5 @@
-import { createElement as h, useState } from 'react'
+import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { createElement as h, Fragment, useState } from 'react'
 import { defaults } from './preferences.js'
 
 export const dictionaries = {
@@ -39,14 +40,15 @@ export function Preferences({ t, usePreferences, setPreference }) {
     }
   }
 
-  return h('div', { style: { display: 'grid', gap: '0.75rem' } },
-    Object.entries(defaults).map(([field, initial]) => h('label', {
-      key: field, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' },
-    }, t(field), h('input', {
-      type: 'checkbox', role: 'switch', checked: snapshot.value?.[field] ?? initial,
-      disabled: snapshot.status !== 'ready' || !snapshot.writable || saving,
-      onChange: event => { void change(field, event.currentTarget.checked) },
-    }))),
+  const disabled = snapshot.status !== 'ready' || !snapshot.writable || saving
+  return h(Fragment, null,
+    Object.entries(defaults).map(([field, initial]) => {
+      const label = t(field)
+      return h('label', { key: field }, h(Switch, {
+        label, checked: snapshot.value?.[field] ?? initial, disabled,
+        onChange: value => { void change(field, value) },
+      }), ' ', label)
+    }),
     failed ? h('p', { role: 'alert' }, t('saveFailed')) : null,
   )
 }
