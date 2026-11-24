@@ -47,7 +47,8 @@ export function apply(ctx, config) {
             id: 'copySimplifiedPath', label: t('copy'), failureLabel: t('copyFailed'),
             async run() {
               const resolved = resolveWorkspacePath(directoryOf(sessionId), path)
-              await navigator.clipboard.writeText(formatPath(resolved, projectOf(sessionId), getHome(), getOptions()))
+              const options = { ...getOptions(), preserveProjectRoot: target === 'directory' }
+              await navigator.clipboard.writeText(formatPath(resolved, projectOf(sessionId), getHome(), options))
               child.contextMenus.notify(t('copied'), true)
             },
           }]

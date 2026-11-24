@@ -27,18 +27,24 @@ function inside(path, directory) {
   return path.windows ? path.path.split('/').slice(-relative.split('/').length).join('/') : relative
 }
 
+function explicitRelativePath(path) {
+  if (path === '') return '.'
+  return /^\.{1,2}(?:[/\\]|$)/.test(path) ? path : `./${path}`
+}
+
 /** 根据所属项目、Host 主目录和用户选项生成可见路径。调用方保留原始目标用于文件操作。 */
 export function formatPath(value, project, home, options = defaults) {
   if (typeof value !== 'string') return value
   if (value === '~' || value.startsWith('~/')) {
     const expanded = value === '~' ? home : resolveWorkspacePath(home, value.slice(2))
     const path = absolutePath(expanded)
-    return path === undefined ? value : (inside(path, project) ?? value) || '.'
+    const relative = path === undefined ? undefined : inside(path, project)
+    return relative === undefined || (relative === '' && options.preserveProjectRoot) ? value : explicitRelativePath(relative)
   }
   const normalized = absolutePath(value)
   if (normalized === undefined) return value
   const relative = inside(normalized, project)
-  if (relative !== undefined) return relative || '.'
+  if (relative !== undefined && (relative !== '' || !options.preserveProjectRoot)) return explicitRelativePath(relative)
 
   if (normalized.windows) {
     const fromHome = inside(normalized, home)
@@ -54,6 +60,13 @@ export function formatPath(value, project, home, options = defaults) {
     ? `${mountedDrive[1].toUpperCase()}:/${normalized.path.slice(mountedDrive[0].length).replace(/^\/+/, '')}` : undefined
   if (windows === undefined) return value
   return options.windowsBackslashes ? windows.replaceAll('/', '\\') : windows
+}
+
+/** DSH 的专用路径标签也可能已由宿主转成相对路径，可直接补上项目相对前缀。 */
+export function formatFilePath(value, project, home, options) {
+  const path = formatPath(value, project, home, options)
+  if (!path || /^(?:~(?:\/|$)|[/\\]|[a-z]:)/i.test(path) || path.includes('://')) return path
+  return explicitRelativePath(path)
 }
 
 /** 可见文件引用的行号或范围跟随路径显示，实际路径的调用方使用 formatPath。 */

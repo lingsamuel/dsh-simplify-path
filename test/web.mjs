@@ -26,6 +26,7 @@ const beta = join(home, 'beta')
 const betaWorkspace = join(beta, 'nested')
 const textFile = join(alpha, 'lines.txt')
 const changedFile = join(alpha, 'changes.txt')
+const secondChangedFile = join(alpha, 'nested', 'name with spaces.txt')
 const wslPath = '/mnt/c/Fixture Drive/report.txt'
 const plainWslPath = '/mnt/d/report.txt'
 const logs = []
@@ -37,8 +38,9 @@ async function seedWorkspaces() {
   await writeFile(changedFile, 'Before the change\n')
   await mkdir(join(alpha, 'nested'))
   await writeFile(join(alpha, 'nested', 'linked.txt'), 'Before the worktree change\n')
+  await writeFile(secondChangedFile, 'Before the second change\n')
   await git('init', '--initial-branch=main')
-  await git('add', 'lines.txt', 'changes.txt', 'nested/linked.txt')
+  await git('add', 'lines.txt', 'changes.txt', 'nested/linked.txt', 'nested/name with spaces.txt')
   await git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-m', 'Fixture')
   // Forge 的本地分支审阅从默认分支的合并基点计算差异。只用本机引用，无需 fetch。
   await git('remote', 'add', 'origin', alpha)
@@ -76,10 +78,10 @@ async function startModel() {
       `\`\`\`text\n${wslPath}\n\`\`\``,
       'Fixture response complete.',
     ].join('\n\n')
-    const block = toolTurn ? { type: 'tool_use', id: 'toolu_fixture_write', name: 'write', input: {} }
-      : { type: 'text', text: '' }
-    const delta = toolTurn ? { type: 'input_json_delta', partial_json: JSON.stringify({ file_path: changedFile, content: 'After the change\n' }) }
-      : { type: 'text_delta', text }
+    const blocks = toolTurn ? [changedFile, secondChangedFile].map((file, index) => ({
+      block: { type: 'tool_use', id: `toolu_fixture_write_${index}`, name: 'write', input: {} },
+      delta: { type: 'input_json_delta', partial_json: JSON.stringify({ file_path: file, content: 'After the change\n' }) },
+    })) : [{ block: { type: 'text', text: '' }, delta: { type: 'text_delta', text } }]
     const message = { id: `msg_${randomUUID().replaceAll('-', '')}`, model: 'deepseek-v4-flash', usage: { input_tokens: 24, output_tokens: 0 } }
     if (!payload.stream) {
       response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
@@ -89,9 +91,11 @@ async function startModel() {
     }
     const events = [
       { type: 'message_start', message },
-      { type: 'content_block_start', index: 0, content_block: block },
-      { type: 'content_block_delta', index: 0, delta },
-      { type: 'content_block_stop', index: 0 },
+      ...blocks.flatMap(({ block, delta }, index) => [
+        { type: 'content_block_start', index, content_block: block },
+        { type: 'content_block_delta', index, delta },
+        { type: 'content_block_stop', index },
+      ]),
       { type: 'message_delta', delta: { stop_reason: toolTurn ? 'tool_use' : 'end_turn' }, usage: { output_tokens: 150 } },
       { type: 'message_stop' },
     ]
@@ -172,19 +176,31 @@ try {
   await chat.getByText('Bare path D:/report.txt.', { exact: true }).waitFor()
   await chat.locator('pre').getByText(wslPath, { exact: true }).waitFor()
   await chat.getByText('the fixture', { exact: true }).waitFor()
-  const link = chat.getByRole('button', { name: 'lines.txt:42', exact: true })
+  const workspaceLocation = `~/${relative(homedir(), alpha)}`
+  await page.getByRole('button', { name: 'Open right sidebar', exact: true }).click()
+  await page.getByRole('button', { name: /Workspace files/ }).click()
+  const filesRoot = page.locator(`[data-files-page] [data-path-label][title="${workspaceLocation}"]:visible`)
+  await filesRoot.waitFor()
+  assert.equal(await filesRoot.textContent(), workspaceLocation)
+  await filesRoot.click({ button: 'right' })
+  await page.getByText('Copy simplified path', { exact: true }).click()
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), workspaceLocation)
+
+  const link = chat.getByRole('button', { name: './lines.txt:42', exact: true })
   await link.click()
-  const filePath = page.locator('[data-textpreview-path]:visible').getByText('lines.txt', { exact: true })
+  const filePath = page.locator('[data-textpreview-path][title="./lines.txt"]:visible')
   await filePath.waitFor()
+  assert.equal(await filePath.textContent(), './lines.txt')
   await page.locator('[data-textpreview-target="42"]').waitFor()
   await link.click({ button: 'right' })
   await page.getByText('Copy simplified path', { exact: true }).click()
-  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'lines.txt')
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), './lines.txt')
   await link.click({ button: 'right' })
   await page.getByText('Copy file path', { exact: true }).click()
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), textFile)
-  await page.locator('[data-files-navigator-toggle]:visible').click()
-  await page.locator('[data-files-body]:visible').getByText('changes.txt', { exact: true }).waitFor()
+  const treeFile = page.locator('[data-files-body]:visible').getByText('changes.txt', { exact: true })
+  if ((await treeFile.count()) === 0) await page.locator('[data-files-navigator-toggle]:visible').click()
+  await treeFile.first().waitFor()
   console.log('通过 Workspace、聊天路径、行号跳转、Files 和两种复制方式。')
 
   const plugins = page.getByRole('button', { name: 'Plugins', exact: true })
@@ -222,10 +238,18 @@ try {
   await chat.getByText('Fixture response complete.', { exact: true }).nth(1).waitFor()
   const changes = page.locator('[data-changed-files]:visible')
   await changes.waitFor()
-  await changes.getByRole('button', { name: /changes\.txt/ }).first().hover()
-  await page.locator('[data-changes-preview-path]').getByText('changes.txt', { exact: true }).waitFor()
-  await changes.getByRole('button', { name: /changes\.txt/ }).first().click()
-  await page.locator('[data-changes-review]:visible [data-path-label]').getByText('changes.txt', { exact: true }).waitFor()
+  await changes.getByText('Edited 2 files', { exact: true }).waitFor()
+  await changes.getByText('./changes.txt', { exact: true }).waitFor()
+  await changes.getByText('./nested/name with spaces.txt', { exact: true }).waitFor()
+  const reviewChanges = changes.getByRole('button', { name: /\.\/changes\.txt/ }).first()
+  await reviewChanges.hover()
+  await page.locator('[data-changes-preview-path]').getByText('./changes.txt', { exact: true }).waitFor()
+  await reviewChanges.click()
+  const review = page.locator('[data-changes-review]:visible')
+  await review.locator('[data-path-label][title="./changes.txt"]').waitFor()
+  await review.locator('[data-review-file]').click()
+  await page.getByRole('menu').getByText('./nested/name with spaces.txt', { exact: true }).click()
+  await review.locator('[data-path-label][title="./nested/name with spaces.txt"]').waitFor()
   console.log('通过 File changes 卡片、悬浮预览及审阅面板。')
 
   await plugins.click()
@@ -242,7 +266,8 @@ try {
   if ((await panel.getAttribute('aria-expanded')) !== 'true') await panel.click()
   await page.locator('[data-session-panel]:visible').waitFor()
   const checkout = page.locator('[data-forge-checkout]:not([data-failed]):visible')
-  await page.locator('[data-session-panel-project]:visible').getByText('.', { exact: true }).waitFor()
+  await page.locator('[data-session-panel-project]:visible').getByText('nested', { exact: true }).hover()
+  await page.getByRole('tooltip').filter({ hasText: `~/${relative(homedir(), betaWorkspace)}` }).waitFor()
   await checkout.getByText('beta', { exact: true }).hover()
   await page.getByRole('tooltip').getByText(`Worktree: ~/${relative(homedir(), beta)}`, { exact: true }).waitFor()
   await page.locator('[data-forge-local]:visible button[data-row-part="body"]').click()
@@ -252,6 +277,9 @@ try {
   console.log('通过真实 Git Worktree 的路径标签和双会话上下文。')
 
   await page.reload()
+  await alphaSession.click()
+  await changes.getByText('./changes.txt', { exact: true }).waitFor()
+  await changes.getByText('./nested/name with spaces.txt', { exact: true }).waitFor()
   await openSettings()
   await page.getByRole('switch', { name: 'Convert WSL drive paths', checked: false, exact: true }).waitFor()
   assert.equal(await backslashes.isChecked(), true)

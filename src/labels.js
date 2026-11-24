@@ -1,5 +1,5 @@
 import { pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
-import { formatPath, formatPathLabel, formatPathText } from './path.js'
+import { formatFilePath, formatPath, formatPathLabel, formatPathText } from './path.js'
 
 const panelId = 'dsh-session-panel-'
 const sessionScope = `[data-conversation-session], [data-sidebar-right-session], [data-row-key^="session:"], [data-session-panel][id^="${panelId}"]`
@@ -9,11 +9,16 @@ const pickerPath = `${cssClass('disambiguated')}[title]`
 const workspacePath = `${cssClass('hoverPath')}, ${pickerPath}`
 const projectRow = '[data-session-panel-project]'
 const pathLabel = '[data-path-label]'
+const filesRoot = `${pathLabel}[data-files-path]`
+const environmentLocation = `${projectRow}, [data-forge-checkout]`
+const changedPath = `[data-changed-files] ${cssClass('path')}`
+const reviewItemPath = cssClass('itemPath')
+const reviewFile = '[data-review-file]'
 const pathButton = `button:is(${cssClass('fileLink')}, ${cssClass('fileMention')}, ${cssClass('fileTargetLink')})`
 const toolSummary = `[data-tool] :is(${cssClass('summary')}, ${cssClass('summarySuffix')})`
 const pathText = [
-  '[data-changes-preview-path]', `[data-changed-files] ${cssClass('path')}`,
-  cssClass('itemPath'), `[data-files-view="search"] ${cssClass('parent')}`,
+  '[data-changes-preview-path]', changedPath,
+  reviewItemPath, `[data-files-view="search"] ${cssClass('parent')}`,
   `[data-tool] ${cssClass('imageMeta')} > div:first-child`,
   `[data-search="matches"] ${cssClass('filePath')}`, `[data-search="paths"] ${cssClass('line')}`,
   '[data-forge-file-label]', toolSummary,
@@ -24,7 +29,7 @@ const hint = [
   '[data-forge-creation] [role="status"]',
 ].join(', ')
 const titleOnly = [
-  '[data-review-file]', '[data-files-path] > div > button[title]', '[data-presented-file] button[title]',
+  reviewFile, '[data-files-path] > div > button[title]', '[data-presented-file] button[title]',
   `[data-read] [data-code-block-banner] ${cssClass('title')}[title]`,
 ].join(', ')
 const targets = [workspacePath, projectRow, pathLabel, pathButton, pathText, prose, hint, titleOnly].join(', ')
@@ -126,21 +131,35 @@ export function observePathLabels(document, projectOf, directoryOf, getHome, get
     const workspace = element.matches(pickerPath) || (hover && portal?.workspace)
     const id = workspace ? undefined : owner ?? portal?.id
     const project = projectOf(id)
-    const format = value => formatPath(value, project, home, options)
-    const formatLabel = value => formatPathLabel(value, project, home, options)
-    const formatText = value => formatPathText(value, project, home, options)
+    const preserveProjectRoot = element.matches(filesRoot) || element.closest(environmentLocation) !== null
+    const displayOptions = preserveProjectRoot ? { ...options, preserveProjectRoot } : options
+    const format = value => formatPath(value, project, home, displayOptions)
+    const formatFile = value => formatFilePath(value, project, home, displayOptions)
+    const formatLabel = value => formatPathLabel(value, project, home, displayOptions)
+    const formatText = value => formatPathText(value, project, home, displayOptions)
     const outsideRaw = parent => !parent.closest(rawContent)
 
     if (element.matches(pathLabel)) {
-      updatePathLabel(element, format)
+      updatePathLabel(element, formatFile)
     } else if (element.matches(projectRow)) {
       updateProjectRow(element, format, id)
+    } else if (element.matches(changedPath)) {
+      const row = element.closest('button')
+      // 这个隐藏说明保存的是历史轮次的绝对路径，不能用会话现在的 cwd 推算。
+      const description = row?.getAttribute('aria-describedby')
+      const recorded = description ? document.getElementById(description)?.textContent : undefined
+      const label = textNodes(element).map(original).join('')
+      const displayed = formatFile(recorded || label)
+      updateText(element, () => displayed, outsideRaw)
+      if (row !== null && label !== '') updateAttribute(row, 'aria-label', value => value.replace(label, () => displayed))
     } else if (element.matches(titleOnly) || element.matches(pickerPath)) {
-      updateAttribute(element, 'title', format)
+      updateAttribute(element, 'title', element.matches(reviewFile) ? formatFile : format)
     } else if (element.matches(pathButton) || hover || (element.matches(pathText) && !element.matches(toolSummary))) {
       updateAttribute(element, 'title', format)
       updateAttribute(element, 'aria-label', formatText)
-      updateText(element, element.matches(pathButton) ? formatLabel : format, outsideRaw)
+      const rendered = element.matches(reviewItemPath) || (element.matches(pathButton) && element.closest('[data-tool]'))
+        ? formatFile : element.matches(pathButton) ? formatLabel : format
+      updateText(element, rendered, outsideRaw)
     } else if (element.matches(prose)) {
       for (const node of textNodes(element)) {
         const parent = node.parentElement
@@ -152,7 +171,7 @@ export function observePathLabels(document, projectOf, directoryOf, getHome, get
         const path = format(value)
         return path === value ? formatText(value) : path
       }, outsideRaw)
-    } else if (element.closest('[data-forge-checkout], [data-session-panel-project]')) {
+    } else if (element.closest(environmentLocation)) {
       updateText(element, value => value.replace(directorySuffix, (_match, prefix, directory) => prefix + format(directory)), outsideRaw)
     } else {
       updateText(element, formatText, parent => !parent.closest(`${rawContent}, a, button`))
